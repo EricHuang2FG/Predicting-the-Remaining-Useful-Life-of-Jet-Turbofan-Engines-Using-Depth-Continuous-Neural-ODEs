@@ -60,13 +60,15 @@ class CNN_ODE(nn.Module):
             nn.Linear(regressor_dimension, 1),
         )
 
-    def forward(self, x, t_span=torch.tensor([0.0, 1.0])):
+    def forward(self, x):
         # get initial state
+        t_span = torch.tensor([0.0, 1.0], device=x.device)
+
         cnn_in = x.transpose(1, 2)  # swap second and third dimensions
         cnn_out = self.cnn(cnn_in)
         theta_0 = self.encoder(cnn_out)
         # numerically integrates the derivative to get the predicted value
         theta_final = odeint(self.ode, theta_0, t_span, method="dopri5")[-1]
-        prediction = self.regressor(theta_final).squeeze()
+        prediction = self.regressor(theta_final).squeeze(-1)
 
         return prediction

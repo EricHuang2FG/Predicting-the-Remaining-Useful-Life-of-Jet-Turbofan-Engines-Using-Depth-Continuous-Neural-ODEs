@@ -195,7 +195,7 @@ def split_tensors_by_ratio(
     return ((a_left, a_right), (b_left, b_right))
 
 
-def visualize_data(file_path: str, column_number: int, figure_dest: str) -> None:
+def visualize_fd001_data(file_path: str, figure_dest: str) -> None:
     """visualize a column of data of a particular file
 
     Plot a graph of the data stored in column column_number of the file located at file_path
@@ -209,32 +209,38 @@ def visualize_data(file_path: str, column_number: int, figure_dest: str) -> None
         None
     """
     data: np.ndarray = np.loadtxt(file_path)
-    y: np.ndarray = data[:, column_number]
+    y_1: np.ndarray = data[:192, 6]
+    y_2: np.ndarray = data[:192, 7]
+    y_3: np.ndarray = data[:192, 8]
 
-    x = list(range(len(y)))
-
-    plt.figure(figsize=DEFAULT_FIGURE_SIZE)
-    plt.plot(x, y, color="red", label="Data", linewidth=1)
-
-    plt.xlabel("Row", fontweight="bold", fontsize=22)
-    plt.ylabel("Value", fontweight="bold", fontsize=22)
-    plt.title(
-        f"Data of Column {column_number + 1}",
-        fontweight="bold",
-        fontsize=26,
+    _, (ax_1, ax_2, ax_3) = plt.subplots(
+        3,
+        1,
+        figsize=DEFAULT_FIGURE_SIZE,
+        sharex=True,
     )
-    plt.legend(loc="lower right", fontsize=18)
-    plt.gca().spines["top"].set_visible(False)
-    plt.gca().spines["right"].set_visible(False)
-    plt.grid(True)
-    plt.savefig(figure_dest, dpi=300)
-    plt.tick_params(axis="both", which="major", labelsize=22)
-    plt.tight_layout()
 
+    x = np.arange(len(y_1))
+
+    ax_1.plot(x, y_1, color="red", label="Sensor 2", linewidth=1)
+    ax_2.plot(x, y_2, color="blue", label="Sensor 3", linewidth=1)
+    ax_3.plot(x, y_3, color="purple", label="Sensor 4", linewidth=1)
+
+    for ax in (ax_1, ax_2, ax_3):
+        ax.set_ylabel("Sensor Reading", fontweight="bold", fontsize=18)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.grid(True)
+        ax.tick_params(axis="both", which="major", labelsize=18)
+        ax.legend(loc="lower right", fontsize=16)
+
+    plt.xlabel("Cycle", fontweight="bold", fontsize=22)
+
+    plt.savefig(figure_dest, dpi=300)
     plt.show()
 
 
 if __name__ == "__main__":
-    visualize_data("CMAPSS/test_FD001.txt", 6, "figures/FD001_column_7.pdf")
-    visualize_data("CMAPSS/test_FD001.txt", 7, "figures/FD001_column_8.pdf")
-    visualize_data("CMAPSS/test_FD001.txt", 8, "figures/FD001_column_9.pdf")
+    visualize_fd001_data(
+        "CMAPSS/test_FD001.txt", "figures/FD001_sample_sensor_data.pdf"
+    )
