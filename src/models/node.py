@@ -67,13 +67,14 @@ class ODE(nn.Module):
             nn.Linear(regressor_dimension, 1),
         )
 
-    def forward(self, x, t_span=torch.tensor([0.0, 1.0])):
+    def forward(self, x):
         # get initial state
+        t_span = torch.tensor([0.0, 1.0], device=x.device)
         theta_0 = self.encoder(x)
 
         # Using the DOPRI-5 solver, the ODE solution is numerically integrated over the time span
         # by going through many forward passes of the Neural ODE with adaptive step sizes
         theta_final = odeint(self.ode, theta_0, t_span, method="dopri5")[-1]
-        prediction = self.regressor(theta_final).squeeze()
+        prediction = self.regressor(theta_final).squeeze(-1)
 
         return prediction

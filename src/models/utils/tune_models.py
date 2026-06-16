@@ -6,17 +6,151 @@ from src.utils.data_processing import (
     preprocess_training_data,
     split_tensors_by_ratio,
 )
-from src.models.utils.model_utils import train_model, evaluate_model
+from src.models.utils.model_utils import (
+    train_model,
+    train_model_repeated,
+    evaluate_model,
+    evaluate_model_repeated,
+)
 from src.utils.constants import (
     DEFAULT_NETWORK_SETTINGS,
+    LINE_WIDTH,
     OPTIMIZED_CNN_NODE_SETTINGS,
     MODEL_TYPE_NODE,
     MODEL_TYPE_CNN_NODE,
+    MODEL_TYPE_CNN,
     DIMENSION_TYPE_ENCODER,
     DIMENSION_TYPE_HIDDEN,
     DIMENSION_TYPE_REGRESSOR,
     DIMENSION_TYPE_CNN_NUM_KERNALS,
+    DATASET_ID_FD001,
+    DATASET_ID_FD002,
+    DATASET_ID_FD003,
+    DATASET_ID_FD004,
 )
+
+
+def window_size_sweep(
+    model_class: str,
+    training_data_directory_template: str,
+    figure_dest: str,
+    settings: dict = DEFAULT_NETWORK_SETTINGS,
+) -> None:
+    if "{{ dataset_id }}" not in training_data_directory_template:
+        raise ValueError(
+            f"Invalid training_data_directory_template: {training_data_directory_template}"
+        )
+
+    all_rmse, all_score = [], []
+    candidate_window_sizes = [30, 40, 50, 60]
+    for window_size in candidate_window_sizes:
+        curr_settings = settings.copy()
+        curr_settings["epochs"] = 25
+        curr_settings["sequence_length"] = window_size
+
+        all_rmse_per_window_size = []
+        all_score_per_window_size = []
+        for dataset_id in [
+            DATASET_ID_FD001,
+            DATASET_ID_FD002,
+            DATASET_ID_FD003,
+            DATASET_ID_FD004,
+        ]:
+            training_data_directory = training_data_directory_template.replace(
+                "{{ dataset_id }}", str(dataset_id)
+            )
+            x, y, _ = preprocess_training_data(
+                training_data_directory, window_size=window_size
+            )
+            (x_train, x_validation), (y_train, y_validation) = split_tensors_by_ratio(
+                x, y, ratio=0.9
+            )
+
+            model_path_template = (
+                f"models/tune/tune.{dataset_id}.w{window_size}"
+                + ".r{{ repeat_index }}.model"
+            )
+            train_model_repeated(
+                5,
+                model_class,
+                None,
+                model_path_template,
+                settings=curr_settings,
+                window_size=window_size,
+                custom_input_data=x_train,
+                custom_expected_output=y_train,
+                do_validation=False
+            )
+            rmse, _, score = evaluate_model_repeated(
+                5,
+                model_class,
+                None,
+                None,
+                None,
+                model_path_template,
+                None,
+                curr_settings,
+                custom_input_data=x_validation,
+                custom_expected_output=y_validation,
+                plot=False,
+            )
+
+            print(
+                f"Window size {window_size}, {dataset_id} RMSE: {rmse}, SCORE: {score}"
+            )
+
+            all_rmse_per_window_size.append(rmse)
+            all_score_per_window_size.append(score)
+
+        average_rmse_per_window_size = np.mean(all_rmse_per_window_size)
+        average_score_per_window_size = np.mean(all_score_per_window_size)
+
+        print(
+            f"WINDOW SIZE {window_size}, RMSE {average_rmse_per_window_size}, SCORE {average_score_per_window_size}"
+        )
+
+        all_rmse.append(average_rmse_per_window_size)
+        all_score.append(average_score_per_window_size)
+
+    _, (ax_1, ax_2) = plt.subplots(
+        2,
+        1,
+        figsize=(12, 9),
+        sharex=True,
+    )
+
+    ax_1.plot(
+        candidate_window_sizes,
+        all_rmse,
+        color="red",
+        linewidth=LINE_WIDTH,
+        marker="x",
+        markersize=15,
+    )
+    ax_1.set_ylabel("RMSE", fontweight="bold", fontsize=20)
+    ax_1.spines["top"].set_visible(False)
+    ax_1.spines["right"].set_visible(False)
+    ax_1.grid(True)
+    ax_1.tick_params(axis="both", which="major", labelsize=22)
+
+    ax_2.plot(
+        candidate_window_sizes,
+        all_score,
+        color="blue",
+        linewidth=LINE_WIDTH,
+        marker="x",
+        markersize=15,
+    )
+    ax_2.set_ylabel("SCORE", fontweight="bold", fontsize=20)
+    ax_2.spines["top"].set_visible(False)
+    ax_2.spines["right"].set_visible(False)
+    ax_2.grid(True)
+    ax_2.tick_params(axis="both", which="major", labelsize=22)
+
+    plt.xlabel("Window Size", fontweight="bold", fontsize=20)
+
+    plt.savefig(figure_dest, dpi=300)
+    plt.show()
 
 
 def learning_rate_sweep(
@@ -41,7 +175,7 @@ def learning_rate_sweep(
     x, y, _ = preprocess_training_data(training_data_directory)
 
     (x_train, x_validation), (y_train, y_validation) = split_tensors_by_ratio(
-        x, y, ratio=0.7
+        x, y, ratio=0.9
     )
 
     curr_settings = settings.copy()
@@ -112,7 +246,7 @@ def hidden_dimensions_sweep(
     x, y, _ = preprocess_training_data(training_data_directory)
 
     (x_train, x_validation), (y_train, y_validation) = split_tensors_by_ratio(
-        x, y, ratio=0.7
+        x, y, ratio=0.9
     )
 
     curr_settings = settings.copy()
@@ -176,7 +310,7 @@ def dropout_rate_sweep(
     x, y, _ = preprocess_training_data(training_data_directory)
 
     (x_train, x_validation), (y_train, y_validation) = split_tensors_by_ratio(
-        x, y, ratio=0.7
+        x, y, ratio=0.9
     )
 
     curr_settings = settings.copy()
@@ -237,10 +371,11 @@ if __name__ == "__main__":
     random.seed(seed)
 
     settings: dict = OPTIMIZED_CNN_NODE_SETTINGS
-    settings["epochs"] = 10  # 10 epochs for tuning suffice
+    settings["epochs"] = 25  # 10 epochs for tuning suffice
 
-    dropout_rate_sweep(
+    window_size_sweep(
         MODEL_TYPE_CNN_NODE,
-        "CMAPSS/train_FD002.txt",
+        "CMAPSS/train_{{ dataset_id }}.txt",
+        "figures/tune_window_size.pdf",
         settings=settings,
     )
